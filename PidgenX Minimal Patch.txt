@@ -1,0 +1,19 @@
+** x64 minimal patch
+
+Pid4, Decoded M/ActDat, 0x328
+0F 10 ?? 58 48 8D // 44,45,46,47 
+0F 10 ?? 68 48 8D // 44,45,46,47
+
+Pid3, AlgoGuid, 0x34
+0F 10 ?? 58 48 B9 // 44,45,46,47 
+0F 10 ?? 28 48 B9 // 44,45,46,47 
+
+** x86 minimal patch
+
+Pid4, Decoded M/ActDat, 0x328
+8D 76 50
+8D 76 60
+
+Pid3, AlgoGuid, 0x34
+8D 77 50 
+8D 77 20
