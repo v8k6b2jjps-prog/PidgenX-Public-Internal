@@ -17,3 +17,13 @@ Pid4, Decoded M/ActDat, 0x328
 Pid3, AlgoGuid, 0x34
 8D 77 50 
 8D 77 20
+
+** ARM64 minimal patch
+
+Pid4, Decoded M/ActDat, 0x328
+?? 82 C5 3C 88 A2 0C 91              // ldur q?,[x21,#0x58]; add x8,x20,#0x328
+?? 82 C6 3C 88 A2 0C 91              // ldur q?,[x21,#0x68]; add x8,x20,#0x328   (x2 hits)
+
+Pid3, AlgoGuid, 0x34
+?? 82 C5 3C 68 08 00 58 ?? 42 83 3C  // ldur q?,[x21,#0x58]; ldr x8,#lit; stur q?,[x20,#0x34]
+?? 82 C2 3C 68 08 00 58 ?? 42 83 3C  // ldur q?,[x21,#0x28]; ldr x8,#lit; stur q?,[x20,#0x34]   (x2 hits)
