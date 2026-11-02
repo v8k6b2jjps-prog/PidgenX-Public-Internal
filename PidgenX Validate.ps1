@@ -25,6 +25,11 @@ if ($Hr -lt 0) {
     return
 }
 
+# --- DPID3 m_abCdKey (+0x034): Algorithm GUID     (16 bytes) ---
+# --- DPID4 m_abCdKey (+0x328): DecodedM / ActData (16 bytes) ---
+$SlotData = [byte[]]$Pid4[0x328..0x337]
+$AlgoData = [byte[]]$Pid3[0x034..0x043]
+
 # --- Init ---
 $Upgrade  = 0
 $Serial   = -1L
@@ -35,17 +40,14 @@ $Security = $null
 $Is2009   = $false
 $Is2005   = $false
 $Legacy   = $false
-
-# --- DPID3 m_abCdKey (+0x34): Algorithm GUID (16 bytes) ---
-$AlgoData = $Pid3[0x34..0x43]
-$AlgoGuid = [Guid]::new([byte[]]$AlgoData)
+$AlgoGuid = [Guid]$AlgoData
 
 switch ($AlgoGuid) {
-    ([Guid]'660672EF-7809-4CFD-8D54-41B7FB738988') { $Is2009 = $true;  $AlgoName = 'pkey2009' }
-    ([Guid]'B8731595-A2F6-430B-A799-FBFFB81A8D73') { $Is2005 = $true;  $AlgoName = 'pkey2005' }
-    ([Guid]'35BFEDB3-9131-4F58-9D9A-5B32D10F50E0') { $Legacy  = $true; $AlgoName = 'pkey980' }
-    ([Guid]'9F44BF99-4976-4BFD-B00A-A8AEFBA45484') { $Legacy  = $true; $AlgoName = 'pkey985' }
-    ([Guid]'2B864AA3-A736-4D50-8604-EBB3BD7D7C61') { $Legacy  = $true; $AlgoName = 'pkey986' }
+    ([Guid]'660672EF-7809-4CFD-8D54-41B7FB738988') { $Is2009  = $true; $AlgoName = 'pkey2009' }
+    ([Guid]'B8731595-A2F6-430B-A799-FBFFB81A8D73') { $Is2005  = $true; $AlgoName = 'pkey2005' }
+    ([Guid]'35BFEDB3-9131-4F58-9D9A-5B32D10F50E0') { $Legacy  = $true; $AlgoName = 'pkey980'  }
+    ([Guid]'9F44BF99-4976-4BFD-B00A-A8AEFBA45484') { $Legacy  = $true; $AlgoName = 'pkey985'  }
+    ([Guid]'2B864AA3-A736-4D50-8604-EBB3BD7D7C61') { $Legacy  = $true; $AlgoName = 'pkey986'  }
 }
 
 # Channel-N keys are pkey2009 even when GUID patch is absent
@@ -55,43 +57,39 @@ if ($CdKey -match 'N') {
     $AlgoGuid = [Guid]'660672EF-7809-4CFD-8D54-41B7FB738988'
 }
 
-# --- DPID4 m_abCdKey (+0x328): DecodedM / ActData (16 bytes) ---
-$Slot = [byte[]]::new(16)
-[Array]::Copy($Pid4, 0x328, $Slot, 0, 16)
-
 if ($Is2009) {
     # pkey2009: 104-bit ActData (13 bytes -> BigInteger)
     $U = [byte[]]::new(14)
-    [Array]::Copy($Slot, 0, $U, 0, 13)
+    [Array]::Copy($SlotData, 0, $U, 0, 13)
     $Act      = [BigInteger]::new($U)
     $Upgrade  = [int]($Act -band 1)
     $Serial   = [long](($Act -shr 1 ) -band ((1L -shl 30) - 1))
     $Group    = [long](($Act -shr 31) -band ((1L -shl 20) - 1))
     $Security = [long](($Act -shr 51) -band ((1L -shl 53) - 1))
-    $ActData  = [Convert]::ToBase64String($Slot, 0, 13)
+    $ActData  = [Convert]::ToBase64String($SlotData, 0, 13)
 
 } elseif ($Is2005) {
     # pkey2005: 64-bit M
-    $M        = [BitConverter]::ToInt64($Slot, 0)
+    $M        = [BitConverter]::ToInt64($SlotData, 0)
     $Upgrade  = [int]($M -band 1)
     $Serial   = ($M -shr 1 ) -band 0x3FFFFFFF
     $Security = ($M -shr 31) -band 0x3FF
-    $ActData  = [Convert]::ToBase64String($Slot, 0, 12)
+    $ActData  = [Convert]::ToBase64String($SlotData, 0, 12)
 
 } elseif ($Legacy) {
     # pkey980/985/986: 64-bit M, no security field
-    $M        = [BitConverter]::ToInt64($Slot, 0)
+    $M        = [BitConverter]::ToInt64($SlotData, 0)
     $Upgrade  = [int]($M -band 1)
     $Serial   = ($M -shr 1) -band 0x3FFFFFFF
-    $ActData  = [Convert]::ToBase64String($Slot, 0, 12)
+    $ActData  = [Convert]::ToBase64String($SlotData, 0, 12)
 
 } else {
     # Unpatched DLL fallback: GUID unknown, try to detect from data
-    $M        = [BitConverter]::ToInt64($Slot, 0)
+    $M        = [BitConverter]::ToInt64($SlotData, 0)
     $Upgrade  = [int]($M -band 1)
     $Serial   = ($M -shr 1)  -band 0x3FFFFFFF
     $SecVal   = ($M -shr 31) -band 0x3FF
-    $ActData  = [Convert]::ToBase64String($Slot, 0, 12)
+    $ActData  = [Convert]::ToBase64String($SlotData, 0, 12)
 
     if ($SecVal -ne 0) {
         $Security = $SecVal
