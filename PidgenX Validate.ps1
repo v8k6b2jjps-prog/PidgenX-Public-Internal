@@ -1,9 +1,33 @@
 ﻿using namespace System.Text
 using namespace System.Numerics
+using namespace System.Management.Automation
 
-Import-Module NativeInteropLib -ErrorAction Stop
 Clear-Host
-Write-Host
+
+if (!([PSTypeName]'PidGenX').Type) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class PidGenX
+{
+    [DllImport("pidgenxIn.dll", EntryPoint = "PidGenX2", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int PidGenX2(
+        string cdKey,
+        string configPath,
+        string mpc,
+        int unknown1, // usually 0
+        int unknown2, // usually 0
+        byte[] pid2,
+        byte[] pid3,
+        byte[] pid4
+    );
+}
+"@ -ErrorAction Stop
+    
+    # Add PSScriptRoot to Path, So it will find Our Dll
+    $env:PATH = [string]::Format("{0};{1}", $PSScriptRoot.TrimEnd('\'), $env:PATH)
+}
 
 # --- PidGenX2 call ---
 $Pid2 = [Byte[]]::new(0x30)
@@ -18,9 +42,10 @@ $MPC        = '00000' # Default-00000, Modern-03612
 $CdKey      = 'MKKRJ-CBYG7-MK2Y4-DXHT6-8VCJB'
 $ConfigPath = 'C:\Windows\System32\spp\tokens\pkeyconfig\pkeyconfig-downlevel.xrm-ms'
 
-$Values = $CdKey, $ConfigPath, $MPC, 0, 0, $Pid2, $Pid3, $Pid4
-$Hr = Invoke-UnmanagedMethod -Dll PidGenXIn -Function PidGenX2 -Values $Values
-if ($Hr -lt 0) {
+$values = $CdKey, $ConfigPath, $MPC, 0, 0, $Pid2, $Pid3, $Pid4
+$hr= [PidGenX]::PidGenX2.Invoke($values)
+if ($hr -lt 0) {
+    Write-Host
     Write-Error "Validation Failed Error: $Hr"
     return
 }
@@ -121,6 +146,7 @@ $PidString = [Encoding]::Unicode.GetString($Pid2).TrimEnd([char]0)
 $Channel  = [Math]::Floor($Serial / 1000000)
 $Sequence = $Serial % 1000000
 
+Write-Host
 Write-Host "  Product Key : $CdKey"
 Write-Host "  PID String  : $PidString"
 Write-Host "  Algorithm   : $AlgoName  {$AlgoGuid}"
