@@ -1,0 +1,10 @@
+Source: jbe ?? 
+Target: nop
+
+** first match [Only!]
+** x64 Version [Only!]
+0F 86 [?? ?? FF FF] -> [00 00 00 00]
+
+Credit
+* WA, for make Actual working patch
+* ME, just help to make it universal
