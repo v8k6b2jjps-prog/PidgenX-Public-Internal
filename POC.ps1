@@ -5,6 +5,9 @@ using namespace System.Management.Automation
 # pidxcheckerclass.h
 # https://github.com/IonBazan/pidgenx/blob/master/pidxcheckerclass.h
 
+# Fallback new logic, ($GroupId -ge 0x40) { "PKey986" } else { "PKey980" }
+# https://github.com/ntriver-org/PKeyMaster/commit/62a508d9fe027aec0dcda153c3a0c8aa85216fbf
+
 Clear-Host
 
 if (!([PSTypeName]'PidGenX').Type) {
@@ -86,8 +89,9 @@ $Security = $null
 $Is2009   = $false
 $Is2005   = $false
 $Legacy   = $false
-$AlgoGuid = [Guid]$AlgoData
 
+$AlgoGuid = $null
+try { $AlgoGuid = [Guid]$AlgoData } catch {}
 switch ($AlgoGuid) {
     ([Guid]'660672EF-7809-4CFD-8D54-41B7FB738988') { $Is2009  = $true; $AlgoName = 'pkey2009' }
     ([Guid]'B8731595-A2F6-430B-A799-FBFFB81A8D73') { $Is2005  = $true; $AlgoName = 'pkey2005' }
@@ -103,8 +107,8 @@ if ($CdKey -match 'N') {
     $AlgoGuid = [Guid]'660672EF-7809-4CFD-8D54-41B7FB738988'
 }
 
+# pkey2009: 104-bit ActData (13 bytes -> BigInteger)
 if ($Is2009) {
-    # pkey2009: 104-bit ActData (13 bytes -> BigInteger)
     $U = [byte[]]::new(14)
     [Array]::Copy($SlotData, 0, $U, 0, 13)
     $Act      = [BigInteger]::new($U)
@@ -114,36 +118,40 @@ if ($Is2009) {
     $Security = [long](($Act -shr 51) -band ((1L -shl 53) - 1))
     $ActData  = [Convert]::ToBase64String($SlotData, 0, 13)
 
+# pkey2005: 64-bit M
 } elseif ($Is2005) {
-    # pkey2005: 64-bit M
     $M        = [BitConverter]::ToInt64($SlotData, 0)
     $Upgrade  = [int]($M -band 1)
     $Serial   = ($M -shr 1 ) -band 0x3FFFFFFF
     $Security = ($M -shr 31) -band 0x3FF
     $ActData  = [Convert]::ToBase64String($SlotData, 0, 12)
 
+# pkey980/985/986: 64-bit M, no security field
 } elseif ($Legacy) {
-    # pkey980/985/986: 64-bit M, no security field
     $M        = [BitConverter]::ToInt64($SlotData, 0)
     $Upgrade  = [int]($M -band 1)
     $Serial   = ($M -shr 1) -band 0x3FFFFFFF
     $ActData  = [Convert]::ToBase64String($SlotData, 0, 12)
 
+# Unpatched DLL fallback: GUID unknown, try to detect from data
 } else {
-    # Unpatched DLL fallback: GUID unknown, try to detect from data
-    $M        = [BitConverter]::ToInt64($SlotData, 0)
-    $Upgrade  = [int]($M -band 1)
-    $Serial   = ($M -shr 1)  -band 0x3FFFFFFF
-    $SecVal   = ($M -shr 31) -band 0x3FF
-    $ActData  = [Convert]::ToBase64String($SlotData, 0, 12)
+    $M       = [BitConverter]::ToInt64($SlotData, 0)
+    $Upgrade = [int]($M -band 1)
+    $Serial  = ($M -shr 1)  -band 0x3FFFFFFF
+    $SecVal  = ($M -shr 31) -band 0x3FF
+    $Group   = [BitConverter]::ToUInt32($Pid3, 0x20)
+    $ActData = [Convert]::ToBase64String($SlotData, 0, 12)
 
     if ($SecVal -ne 0) {
         $Security = $SecVal
         $AlgoName = 'pkey2005'
         $AlgoGuid = [Guid]'B8731595-A2F6-430B-A799-FBFFB81A8D73'
-    } else {
-        $AlgoName = 'Legacy'
-        $AlgoGuid = [Guid]::Empty
+    } elseif ($Group -ge 0x40) { 
+        $AlgoName = 'pkey986'
+        $AlgoGuid = [Guid]'2B864AA3-A736-4D50-8604-EBB3BD7D7C61'
+    } else { 
+        $AlgoName = 'pkey980'
+        $AlgoGuid = [Guid]'35BFEDB3-9131-4F58-9D9A-5B32D10F50E0'
     }
 }
 
