@@ -49,18 +49,26 @@ $ConfigPath = Join-Path $BinPath 'pkeyconfig.xrm-ms'
 $values  = $CdKey, $ConfigPath, $MPC, 0, 0, $Pid2, $Pid3, $Pid4
 $HResult = [PidGenX]::PidGenX2.Invoke($values)
 
-if ($HResult -lt 0) {
-    $ErrorText = switch ($HResult) {
-        -2147024809 { "The parameter is incorrect." }                   # PGX_MALFORMEDKEY
-        -1979645695 { "Specified key is not valid." }                   # PGX_INVALIDKEY
-        -1979645951 { "Specified key is valid but can't be verified." } # 
-        -2147024894 { "Can't find specified pkeyconfig file." }         # PGX_PKEYMISSING
-        -2147024893 { "Specified pkeyconfig path does not exist." }     # 
-        -2147483633 { "Specified key is BlackListed." }                 # PGX_BLACKLISTEDKEY
-            default { "Unhandled HResult" }                             # 
-    }
-    $HResultHex = "0x{0:X8}" -f $HResult
-    throw "HRESULT: $ErrorText ($HResultHex)"
+# --- PidGenX2 result handling ---
+# PidGenX2 collapses ~20 internal 0x80041xxx reasons into the few codes below
+# before returning, so these are the only values the caller ever sees.
+$Hex       = '0x{0:X8}' -f $HResult
+$Unverified = $false
+
+switch ($Hex) {
+    '0x00000000' { }   # S_OK - valid & verified
+    '0x8A010001' { throw "Specified key is valid but can't be verified ($Hex)" }
+    '0x8A010101' { throw "Specified key is not valid - PGX_INVALIDKEY ($Hex)" }   # from 0x80041023/24/25
+    '0x80070057' { throw "Malformed or empty key - E_INVALIDARG ($Hex)" }         # PGX_MALFORMEDKEY / null cdKey
+    '0x8007000E' { throw "Out of memory - E_OUTOFMEMORY ($Hex)" }
+    '0x80070002' { throw "Can't find specified pkeyconfig file - PGX_PKEYMISSING ($Hex)" }
+    '0x80070003' { throw "Specified pkeyconfig path does not exist ($Hex)" }
+
+    # Header defines PGX_BLACKLISTEDKEY = 0x0000000F, but no analyzed build
+    # actually emits 0x8000000F - kept only for completeness.
+    '0x8000000F' { throw "Specified key is blacklisted - PGX_BLACKLISTEDKEY ($Hex) [unverified]" }
+
+    default      { if ($HResult -lt 0) { throw "Unhandled HRESULT ($Hex)" } }
 }
 
 # --- DPID3 m_abCdKey (+0x034): Algorithm GUID     (16 bytes) ---

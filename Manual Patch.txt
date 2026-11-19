@@ -11,9 +11,9 @@ X64 MINIMAL PATCH
   0F 10 ?? 58 48 B9   // wildcards: 44, 45, 46, 47
   0F 10 ?? 28 48 B9   // wildcards: 44, 45, 46, 47
 
-[Overlap Patch, jbe ?? -> nop, First one]
-  0F 86 [?? ?? FF FF]
-  0F 86 [00 00 00 00]
+[Overlap Patch, jbe -> nop, universal]
+  8B ?? 34 39 ?? 30 0F 86 [?? ?? ?? ??]
+  8B ?? 34 39 ?? 30 0F 86 [00 00 00 00]
 
 ================================================================================
 X86 MINIMAL PATCH
@@ -27,9 +27,9 @@ X86 MINIMAL PATCH
   8D 77 50
   8D 77 20
 
-[Overlap Patch, jbe ?? -> nop, First one]
-  0F 86 [?? ??] 00 00
-  0F 86 [00 00] 00 00
+[Overlap Patch, jbe -> nop, universal]
+  8B ?? 24 3B ?? 28 0F 86 [?? ?? ?? ??]
+  8B ?? 24 3B ?? 28 0F 86 [00 00 00 00]
 
 ================================================================================
 ARM64 MINIMAL PATCH
@@ -42,6 +42,13 @@ ARM64 MINIMAL PATCH
 [Pid3, AlgoGuid, 0x34, First one]
   ?? 82 C5 3C 68 08 00 58 ?? 42 83 3C  // ldur q?,[x21,#0x58]; ldr x8,#lit; stur q?,[x20,#0x34]
   ?? 82 C2 3C 68 08 00 58 ?? 42 83 3C  // ldur q?,[x21,#0x28]; ldr x8,#lit; stur q?,[x20,#0x34]   (x2 hits)
+
+[Overlap Patch, b.ls -> nop, universal]
+  6B 35 40 B9 4A 31 40 B9 5F 01 0B 6B [?9 ?? ?? 54]  // ldr w,[x,#0x34]; ldr w,[x,#0x30]; cmp w,w; b.ls <overlap>   (x2 hits)
+  6B 35 40 B9 4A 31 40 B9 5F 01 0B 6B [1F 20 03 D5]  // ...                                      ; nop
+  // Low nibble 9 = cond LS. The SAME 12-byte prefix also precedes a b.hi
+  // (cond 8 = Start>End sanity check) which MUST stay intact - pin the nibble.
+  // NOP, not zero: a zero-displacement b.ls would branch to itself (loop).
 
 ================================================================================
 CREDITS
